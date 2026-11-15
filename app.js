@@ -1,0 +1,22 @@
+const languages={en:"English",es:"Spanish",fr:"French",de:"German",it:"Italian",pt:"Portuguese",nl:"Dutch",no:"Norwegian",sv:"Swedish",da:"Danish",fi:"Finnish",pl:"Polish",uk:"Ukrainian",ru:"Russian",ar:"Arabic",hi:"Hindi",id:"Indonesian",tl:"Filipino",ja:"Japanese",ko:"Korean",zh:"Chinese"};
+const el=id=>document.getElementById(id);
+const read=(key)=>{try{const value=JSON.parse(localStorage.getItem(key)||"[]");return Array.isArray(value)?value:[]}catch{return []}};
+let history=read("globetalk-history"),favorites=read("globetalk-favorites"),conversation=false,last="";
+const save=(key,data)=>{try{localStorage.setItem(key,JSON.stringify(data))}catch{}};
+for(const id of ["from","to"]){for(const [code,name] of Object.entries(languages)){const o=document.createElement("option");o.value=code;o.textContent=name;el(id).append(o)}}
+el("from").value="en";el("to").value="es";
+const status=t=>el("status").textContent=t;
+function display(t){last=t;el("output").textContent=t||"Your translation appears here."}
+function restore(item){el("from").value=item.from;el("to").value=item.to;el("input").value=item.input;display(item.output);window.scrollTo({top:0,behavior:"smooth"})}
+function render(key,id){const container=el(id);container.replaceChildren();const arr=key==="globetalk-history"?history:favorites;if(!arr.length){const p=document.createElement("p");p.className="muted";p.textContent="Nothing saved yet.";container.append(p)}for(const item of arr.slice(0,15)){const btn=document.createElement("button");btn.className="history-item";btn.textContent=item.input+" → "+item.output;btn.onclick=()=>restore(item);container.append(btn)}}
+function renderAll(){render("globetalk-history","history");render("globetalk-favorites","favorites")}
+el("swap").onclick=()=>{const a=el("from").value;el("from").value=el("to").value;el("to").value=a;const b=el("input").value;el("input").value=last;display(b)};
+el("clear").onclick=()=>{el("input").value="";display("");status("Ready")};
+el("translate").onclick=async()=>{const input=el("input").value.trim(),from=el("from").value,to=el("to").value;if(!input){status("Enter text first");return}if(from===to){display(input);return}const btn=el("translate");btn.disabled=true;status("Translating…");try{const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),15000);let response;try{response=await fetch("https://api.mymemory.translated.net/get?q="+encodeURIComponent(input)+"&langpair="+encodeURIComponent(from+"|"+to),{signal:controller.signal})}finally{clearTimeout(timer)}if(!response.ok)throw Error("Service unavailable");const data=await response.json();if(Number(data.responseStatus)!==200||!data.responseData?.translatedText)throw Error(data.responseDetails||"Unsupported language pair");const txt=document.createElement("textarea");txt.innerHTML=data.responseData.translatedText;display(txt.value);history.unshift({input,from,to,output:last});history=history.slice(0,50);save("globetalk-history",history);renderAll();status("Translated")}catch(e){status("Translation failed: "+e.message)}finally{btn.disabled=false}};
+el("listen").onclick=()=>{if(!last)return;if(!("speechSynthesis" in window)){status("Speech not supported");return}speechSynthesis.cancel();const u=new SpeechSynthesisUtterance(last);u.lang=el("to").value;speechSynthesis.speak(u)};
+el("copy").onclick=async()=>{if(!last)return;try{await navigator.clipboard.writeText(last);status("Copied")}catch{status("Clipboard unavailable")}};
+el("favorite").onclick=()=>{if(!last)return;const item={input:el("input").value,from:el("from").value,to:el("to").value,output:last};if(!favorites.some(f=>JSON.stringify(f)===JSON.stringify(item))){favorites.unshift(item);favorites=favorites.slice(0,100);save("globetalk-favorites",favorites);renderAll()}status("Saved to favorites")};
+el("conversation").onclick=()=>{conversation=!conversation;el("conversation").textContent="Conversation: "+(conversation?"On":"Off");el("reply").hidden=!conversation};
+el("reply").onclick=()=>{const a=el("from").value;el("from").value=el("to").value;el("to").value=a;el("input").value="";display("");el("input").focus();status("Ready for reply")};
+el("mic").onclick=()=>{const Recognition=window.SpeechRecognition||window.webkitSpeechRecognition;if(!Recognition){status("Speech input unsupported in this browser");return}const r=new Recognition();r.lang=el("from").value;r.onresult=e=>{el("input").value=e.results[0][0].transcript.slice(0,500)};r.onerror=e=>status("Microphone: "+e.error);r.start();status("Listening…")};
+renderAll();
