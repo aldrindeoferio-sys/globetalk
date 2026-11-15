@@ -20,3 +20,14 @@ el("conversation").onclick=()=>{conversation=!conversation;el("conversation").te
 el("reply").onclick=()=>{const a=el("from").value;el("from").value=el("to").value;el("to").value=a;el("input").value="";display("");el("input").focus();status("Ready for reply")};
 el("mic").onclick=()=>{const Recognition=window.SpeechRecognition||window.webkitSpeechRecognition;if(!Recognition){status("Speech input unsupported in this browser");return}const r=new Recognition();r.lang=el("from").value;r.onresult=e=>{el("input").value=e.results[0][0].transcript.slice(0,500)};r.onerror=e=>status("Microphone: "+e.error);r.start();status("Listening…")};
 renderAll();
+const phrases=["Hello!","How are you?","Where is the nearest station?","How much does this cost?","Thank you!","Can you help me?"];
+for(const phrase of phrases){const b=document.createElement("button");b.textContent=phrase;b.onclick=()=>{el("input").value=phrase;el("input").focus();status("Phrase ready to translate")};el("phrases").append(b)}
+function selectTab(id){for(const panel of ["translate-panel","conversation-panel","saved-panel"])el(panel).hidden=panel!==id;for(const b of document.querySelectorAll("[data-tab]")){const active=b.dataset.tab===id;b.classList.toggle("active",active);b.setAttribute("aria-selected",String(active))}}
+for(const b of document.querySelectorAll("[data-tab]"))b.onclick=()=>selectTab(b.dataset.tab);
+let transcript=[];
+function drawTranscript(){el("transcript").replaceChildren();if(!transcript.length){const p=document.createElement("p");p.className="muted";p.textContent="Your conversation will appear here after translating a message.";el("transcript").append(p)}for(const item of transcript){const bubble=document.createElement("div");bubble.className="bubble";const head=document.createElement("small");head.textContent=(languages[item.from]||item.from)+" → "+(languages[item.to]||item.to);const original=document.createElement("div");original.textContent=item.input;const translated=document.createElement("strong");translated.textContent=item.output;bubble.append(head,original,translated);el("transcript").append(bubble)}}
+drawTranscript();
+const translateOriginal=el("translate").onclick;
+el("translate").onclick=async()=>{const previous=history.length;await translateOriginal();if(history.length>previous&&history[0].output===last){transcript.push({...history[0]});drawTranscript();if(conversation)selectTab("conversation-panel")}};
+el("switch-speaker").onclick=()=>{const a=el("from").value;el("from").value=el("to").value;el("to").value=a;el("input").value="";display("");selectTab("translate-panel");el("input").focus();status("Ready for the next speaker")};
+el("clear-conversation").onclick=()=>{transcript=[];drawTranscript();status("Conversation cleared")};
